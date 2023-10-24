@@ -151,8 +151,16 @@ func UpdateRole(id string, role *Role) (bool, error) {
 	}
 
 	for _, permission := range permissions {
-		addGroupingPolicies(permission)
-		addPolicies(permission)
+		err = addGroupingPolicies(permission)
+		if err != nil {
+			return false, err
+		}
+
+		err = addPolicies(permission)
+		if err != nil {
+			return false, err
+		}
+
 		visited[permission.GetId()] = struct{}{}
 	}
 
@@ -166,10 +174,15 @@ func UpdateRole(id string, role *Role) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+
 		for _, permission := range permissions {
 			permissionId := permission.GetId()
 			if _, ok := visited[permissionId]; !ok {
-				addGroupingPolicies(permission)
+				err = addGroupingPolicies(permission)
+				if err != nil {
+					return false, err
+				}
+
 				visited[permissionId] = struct{}{}
 			}
 		}
@@ -208,16 +221,15 @@ func AddRolesInBatch(roles []*Role) bool {
 	}
 
 	affected := false
-	for i := 0; i < (len(roles)-1)/batchSize+1; i++ {
-		start := i * batchSize
-		end := (i + 1) * batchSize
+	for i := 0; i < len(roles); i += batchSize {
+		start := i
+		end := i + batchSize
 		if end > len(roles) {
 			end = len(roles)
 		}
 
 		tmp := roles[start:end]
-		// TODO: save to log instead of standard output
-		// fmt.Printf("Add users: [%d - %d].\n", start, end)
+		fmt.Printf("The syncer adds roles: [%d - %d]\n", start, end)
 		if AddRoles(tmp) {
 			affected = true
 		}
@@ -255,14 +267,24 @@ func (role *Role) GetId() string {
 
 func getRolesByUserInternal(userId string) ([]*Role, error) {
 	roles := []*Role{}
-	err := ormer.Engine.Where("users like ?", "%"+userId+"\"%").Find(&roles)
+	user, err := GetUser(userId)
+	if err != nil {
+		return roles, err
+	}
+
+	query := ormer.Engine.Where("role.users like ?", fmt.Sprintf("%%%s%%", userId))
+	for _, group := range user.Groups {
+		query = query.Or("role.groups like ?", fmt.Sprintf("%%%s%%", group))
+	}
+
+	err = query.Find(&roles)
 	if err != nil {
 		return roles, err
 	}
 
 	res := []*Role{}
 	for _, role := range roles {
-		if util.InSlice(role.Users, userId) {
+		if util.InSlice(role.Users, userId) || util.HaveIntersection(role.Groups, user.Groups) {
 			res = append(res, role)
 		}
 	}

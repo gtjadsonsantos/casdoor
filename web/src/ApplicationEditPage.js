@@ -28,12 +28,13 @@ import i18next from "i18next";
 import UrlTable from "./table/UrlTable";
 import ProviderTable from "./table/ProviderTable";
 import SignupTable from "./table/SignupTable";
+import SamlAttributeTable from "./table/SamlAttributeTable";
 import PromptPage from "./auth/PromptPage";
 import copy from "copy-to-clipboard";
+import ThemeEditor from "./common/theme/ThemeEditor";
 
 import {Controlled as CodeMirror} from "react-codemirror2";
 import "codemirror/lib/codemirror.css";
-import ThemeEditor from "./common/theme/ThemeEditor";
 
 require("codemirror/theme/material-darker.css");
 require("codemirror/mode/htmlmixed/htmlmixed");
@@ -104,6 +105,7 @@ class ApplicationEditPage extends React.Component {
       providers: [],
       uploading: false,
       mode: props.location.mode !== undefined ? props.location.mode : "edit",
+      samlAttributes: [],
       samlMetadata: null,
       isAuthorized: true,
     };
@@ -639,6 +641,29 @@ class ApplicationEditPage extends React.Component {
           </Col>
         </Row>
         <Row style={{marginTop: "20px"}} >
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 19 : 2}>
+            {Setting.getLabel(i18next.t("application:Enable SAML C14N10"), i18next.t("application:Enable SAML C14N10 - Tooltip"))} :
+          </Col>
+          <Col span={1} >
+            <Switch checked={this.state.application.enableSamlC14n10} onChange={checked => {
+              this.updateApplicationField("enableSamlC14n10", checked);
+            }} />
+          </Col>
+        </Row>
+        <Row style={{marginTop: "20px"}} >
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+            {Setting.getLabel(i18next.t("general:SAML attributes"), i18next.t("general:SAML attributes - Tooltip"))} :
+          </Col>
+          <Col span={22} >
+            <SamlAttributeTable
+              title={i18next.t("general:SAML attributes")}
+              table={this.state.application.samlAttributes}
+              application={this.state.application}
+              onUpdateTable={(value) => {this.updateApplicationField("samlAttributes", value);}}
+            />
+          </Col>
+        </Row>
+        <Row style={{marginTop: "20px"}} >
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("application:SAML metadata"), i18next.t("application:SAML metadata - Tooltip"))} :
           </Col>
@@ -1001,7 +1026,7 @@ class ApplicationEditPage extends React.Component {
     );
   }
 
-  submitApplicationEdit(willExist) {
+  submitApplicationEdit(exitAfterSave) {
     const application = Setting.deepCopy(this.state.application);
     application.providers = application.providers?.filter(provider => this.state.providers.map(provider => provider.name).includes(provider.name));
 
@@ -1013,7 +1038,7 @@ class ApplicationEditPage extends React.Component {
             applicationName: this.state.application.name,
           });
 
-          if (willExist) {
+          if (exitAfterSave) {
             this.props.history.push("/applications");
           } else {
             this.props.history.push(`/applications/${this.state.application.organization}/${this.state.application.name}`);
